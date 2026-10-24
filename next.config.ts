@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // The app runs entirely in the browser (IndexedDB + GitHub API), so it ships
+  // as plain static files that can be hosted anywhere.
+  output: "export",
   reactCompiler: true,
   turbopack: {
     rules: {
