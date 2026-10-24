@@ -10,7 +10,9 @@ import { languages } from "@codemirror/language-data";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { db, saveContent } from "@/lib/db";
+import { takePendingHeading, type NoteIndex, type Wikilink } from "@/lib/links";
 import { beforeSync, merge3, scheduleSync } from "@/lib/sync";
+import { scrollToHeading, setNoteIndex, wikilinks } from "./wikilinks";
 
 const SAVE_DELAY = 400;
 const PUSH_DELAY = 10_000;
@@ -44,6 +46,14 @@ const theme = EditorView.theme({
   ".cm-cursor": { borderLeftColor: "var(--accent)", borderLeftWidth: "2px" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": { backgroundColor: "var(--selection) !important" },
   ".cm-placeholder": { color: "var(--muted)" },
+  ".cm-wikilink": { color: "var(--accent)", cursor: "pointer" },
+  ".cm-wikilink-unresolved": { opacity: "0.65" },
+  ".cm-tooltip": { border: "1px solid var(--border)", backgroundColor: "var(--panel)", borderRadius: "10px", overflow: "hidden" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: "var(--font-sans)", maxHeight: "40vh", maxWidth: "min(90vw, 24rem)" },
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { padding: "8px 12px", lineHeight: "1.3" },
+  ".cm-tooltip-autocomplete ul li[aria-selected]": { backgroundColor: "var(--hover)", color: "var(--foreground)" },
+  ".cm-completionDetail": { display: "block", marginLeft: "0", fontStyle: "normal", fontSize: "12px", color: "var(--muted)" },
+  ".cm-completionMatchedText": { textDecoration: "none", fontWeight: "600" },
 });
 
 /** Replace the doc with `next` as one minimal change, so the cursor stays put. */
@@ -59,13 +69,28 @@ function minimalChange(prev: string, next: string) {
   return { from: start, to: endPrev, insert: next.slice(start, endNext) };
 }
 
-export function Editor({ path }: { path: string }) {
+export function Editor({
+  path,
+  index,
+  onFollow,
+}: {
+  path: string;
+  index: NoteIndex | undefined;
+  onFollow: (link: Wikilink) => void;
+}) {
   const file = useLiveQuery(() => db.files.get(path).then((f) => f ?? null), [path]);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   /** The content we know the DB holds and the editor was last in agreement with. */
   const synced = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Latest values for the CodeMirror callbacks, which are created once per note.
+  const indexRef = useRef(index);
+  const followRef = useRef(onFollow);
+  useEffect(() => {
+    indexRef.current = index;
+    followRef.current = onFollow;
+  });
 
   const loaded = file !== undefined && file !== null && !file.deleted;
   const initialContent = loaded ? file.content : null;
@@ -99,6 +124,14 @@ export function Editor({ path }: { path: string }) {
           syntaxHighlighting(highlight),
           placeholder("Start writing…"),
           theme,
+          wikilinks({
+            path,
+            index: indexRef.current ?? null,
+            onFollow: (link) => {
+              if (!link.target && link.heading) scrollToHeading(v, link.heading);
+              else followRef.current(link);
+            },
+          }),
           EditorView.contentAttributes.of({ autocapitalize: "sentences", spellcheck: "true", autocorrect: "on" }),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged || u.transactions.some((tr) => tr.annotation(external))) return;
@@ -114,6 +147,8 @@ export function Editor({ path }: { path: string }) {
     synced.current = initialContent;
     // New notes: open straight into typing.
     if (initialContent === "") v.focus();
+    const heading = takePendingHeading();
+    if (heading) requestAnimationFrame(() => scrollToHeading(v, heading));
 
     const onHide = () => {
       if (document.visibilityState === "hidden") void flush();
@@ -128,6 +163,10 @@ export function Editor({ path }: { path: string }) {
       view.current = null;
     };
   }, [initialContent === null, path]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: setNoteIndex.of(index ?? null) });
+  }, [index]);
 
   // Apply changes that arrive from sync while the note is open.
   const dbContent = loaded ? file.content : null;

@@ -34,5 +34,7 @@ On iOS, installing it matters: Safari may clear storage for sites that aren't in
 - `src/lib/db.ts`: IndexedDB schema (Dexie) and local file operations
 - `src/lib/github.ts`: GitHub REST/GraphQL client
 - `src/lib/sync.ts`: clone, pull + 3-way merge, push, sync scheduling
+- `src/lib/links.ts`: Obsidian-style `[[wikilink]]` parsing and resolution, and the live note index
 - `src/components/Editor.tsx`: CodeMirror 6 editor with debounced saving and live merging of incoming changes
+- `src/components/wikilinks.ts`: editor extension for link styling, tap to follow, `[[` autocomplete and heading scroll
 - `public/sw.js`: service worker that caches the app shell for offline launch

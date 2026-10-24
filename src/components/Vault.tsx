@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { createFile, db, deleteFile, renameFile, resetVault, type VaultConfig } from "@/lib/db";
+import { newNotePathFor, resolveLink, setPendingHeading, useNoteIndex, type Wikilink } from "@/lib/links";
 import { scheduleSync, syncNow } from "@/lib/sync";
 import { Editor } from "./Editor";
 import { FileTree, noteName } from "./FileTree";
@@ -68,6 +69,7 @@ export function Vault({ config }: { config: VaultConfig }) {
   const [drawerOpen, setDrawerOpen] = useState(() => !window.location.hash && !readLastNote());
   const [menuOpen, setMenuOpen] = useState(false);
   const status = useSyncStatus();
+  const index = useNoteIndex();
 
   // Only query while the drawer is open; otherwise every keystroke save would re-read the vault.
   const files = useLiveQuery(
@@ -89,6 +91,24 @@ export function Vault({ config }: { config: VaultConfig }) {
     openNote(path);
     setDrawerOpen(false);
   };
+
+  /** Follow a [[wikilink]]; like Obsidian, a link to a missing note creates it. */
+  async function follow(link: Wikilink) {
+    if (!activePath || !index) return;
+    if (/\.(?!md$)[a-z0-9]+$/i.test(link.target)) return; // attachments aren't viewable yet
+    let path = resolveLink(link.target, activePath, index);
+    if (!path) {
+      path = await newNotePathFor(link.target, activePath);
+      try {
+        await createFile(path);
+        scheduleSync(10_000);
+      } catch {
+        // Already exists (index was momentarily stale): just open it.
+      }
+    }
+    setPendingHeading(link.heading ?? null);
+    openNote(path);
+  }
 
   async function newNote() {
     const folder = activePath?.includes("/") ? activePath.slice(0, activePath.lastIndexOf("/") + 1) : "";
@@ -176,7 +196,7 @@ export function Vault({ config }: { config: VaultConfig }) {
 
       <main className="min-h-0 flex-1 overflow-hidden">
         {activePath ? (
-          <Editor key={activePath} path={activePath} />
+          <Editor key={activePath} path={activePath} index={index} onFollow={follow} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-[var(--muted)]">
             <p>No note open</p>
