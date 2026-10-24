@@ -26,6 +26,12 @@ export interface VaultFile {
   updatedAt: number;
 }
 
+/** Downloaded bytes of binary files (images), keyed by git blob sha. */
+export interface CachedBlob {
+  sha: string;
+  data: Blob;
+}
+
 interface KV {
   key: string;
   value: unknown;
@@ -34,6 +40,7 @@ interface KV {
 class VaultDB extends Dexie {
   files!: EntityTable<VaultFile, "path">;
   kv!: EntityTable<KV, "key">;
+  blobs!: EntityTable<CachedBlob, "sha">;
 
   constructor() {
     super("obsidian-note-access");
@@ -42,6 +49,7 @@ class VaultDB extends Dexie {
       files: "path",
       kv: "key",
     });
+    this.version(2).stores({ blobs: "sha" });
   }
 }
 
@@ -60,9 +68,10 @@ export const getConfig = () => getKV<VaultConfig>("config");
 export const getHeadOid = () => getKV<string>("headOid");
 
 export async function resetVault() {
-  await db.transaction("rw", db.files, db.kv, async () => {
+  await db.transaction("rw", db.files, db.kv, db.blobs, async () => {
     await db.files.clear();
     await db.kv.clear();
+    await db.blobs.clear();
   });
 }
 

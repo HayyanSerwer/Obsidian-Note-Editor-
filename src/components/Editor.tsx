@@ -13,6 +13,7 @@ import { db, saveContent } from "@/lib/db";
 import { takePendingHeading, type NoteIndex, type Wikilink } from "@/lib/links";
 import { beforeSync, merge3, scheduleSync } from "@/lib/sync";
 import { scrollToHeading, setNoteIndex, wikilinks } from "./wikilinks";
+import { embeds } from "./embeds";
 
 const SAVE_DELAY = 400;
 const PUSH_DELAY = 10_000;
@@ -124,6 +125,7 @@ export function Editor({
           syntaxHighlighting(highlight),
           placeholder("Start writing…"),
           theme,
+          embeds(path),
           wikilinks({
             path,
             index: indexRef.current ?? null,

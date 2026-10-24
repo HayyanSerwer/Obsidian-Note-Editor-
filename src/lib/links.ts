@@ -28,19 +28,30 @@ const stripMd = (path: string) => path.replace(/\.md$/i, "");
 const basename = (path: string) => stripMd(path.split("/").pop()!);
 const dirname = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
+/** Resolves "." and ".." segments, e.g. for relative image paths. */
+function normalizePath(path: string) {
+  const out: string[] = [];
+  for (const seg of path.split("/")) {
+    if (seg === "..") out.pop();
+    else if (seg && seg !== ".") out.push(seg);
+  }
+  return out.join("/");
+}
+
 export interface NoteIndex {
   notes: string[];
-  /** lowercase basename -> paths */
+  /** lowercase name -> paths. Notes are keyed without ".md", attachments with their extension. */
   byName: Map<string, string[]>;
-  /** lowercase path without .md -> path */
+  /** lowercase path (notes without ".md") -> path */
   byPath: Map<string, string>;
 }
 
 export function buildIndex(paths: string[]): NoteIndex {
-  const notes = paths.filter((p) => /\.md$/i.test(p) && !isHidden(p));
+  const files = paths.filter((p) => !isHidden(p));
+  const notes = files.filter((p) => /\.md$/i.test(p));
   const byName = new Map<string, string[]>();
   const byPath = new Map<string, string>();
-  for (const p of notes) {
+  for (const p of files) {
     const key = basename(p).toLowerCase();
     byName.set(key, [...(byName.get(key) ?? []), p]);
     byPath.set(stripMd(p).toLowerCase(), p);
@@ -57,7 +68,12 @@ export function resolveLink(target: string, fromPath: string, index: NoteIndex):
   if (!t) return null;
   if (t.includes("/")) {
     const fromDir = dirname(fromPath).toLowerCase();
-    return index.byPath.get(t) ?? (fromDir ? index.byPath.get(`${fromDir}/${t}`) : undefined) ?? null;
+    return (
+      index.byPath.get(normalizePath(t)) ??
+      (fromDir ? index.byPath.get(normalizePath(`${fromDir}/${t}`)) : undefined) ??
+      // Obsidian falls back to the file name when a path doesn't match exactly.
+      resolveLink(t.split("/").pop()!, fromPath, index)
+    );
   }
   const matches = index.byName.get(t);
   if (!matches?.length) return null;

@@ -7,7 +7,7 @@ import { linkTextFor, parseWikilink, resolveLink, type NoteIndex, type Wikilink 
 /** Dispatch with the latest note index so link styling and completions stay current. */
 export const setNoteIndex = StateEffect.define<NoteIndex | null>();
 
-const indexField = StateField.define<NoteIndex | null>({
+export const indexField = StateField.define<NoteIndex | null>({
   create: () => null,
   update(value, tr) {
     for (const e of tr.effects) if (e.is(setNoteIndex)) value = e.value;
@@ -18,7 +18,7 @@ const indexField = StateField.define<NoteIndex | null>({
 const LINK_RE = /\[\[([^[\]\n]+?)\]\]/g;
 const hasAttachmentExt = (target: string) => /\.(?!md$)[a-z0-9]+$/i.test(target);
 
-function inCode(state: EditorState, pos: number) {
+export function inCode(state: EditorState, pos: number) {
   for (let node: { name: string; parent: unknown } | null = syntaxTree(state).resolveInner(pos, 1); node; node = node.parent as typeof node) {
     if (/Code|Comment/.test(node.name)) return true;
   }

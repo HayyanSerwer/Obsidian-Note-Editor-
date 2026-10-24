@@ -100,6 +100,19 @@ async function getBlobText(cfg: VaultConfig, sha: string) {
   return decoder.decode(base64ToBytes(blob.content));
 }
 
+/** Raw bytes of a blob of any size (up to GitHub's 100 MB limit). */
+export async function getBlobBytes(cfg: VaultConfig, sha: string): Promise<ArrayBuffer> {
+  const res = await fetch(`${API}/repos/${cfg.owner}/${cfg.repo}/git/blobs/${sha}`, {
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      Accept: "application/vnd.github.raw+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!res.ok) throw new GitHubError(`GitHub ${res.status}`, res.status);
+  return res.arrayBuffer();
+}
+
 const BATCH = 50;
 
 /**
